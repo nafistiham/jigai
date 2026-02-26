@@ -5,11 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/jigai"><img src="https://img.shields.io/pypi/v/jigai?color=blue&label=PyPI" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/jigai"><img src="https://img.shields.io/pypi/pyversions/jigai" alt="Python versions"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
-  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
-  <a href="https://github.com/nafistiham/jigai/actions"><img src="https://github.com/nafistiham/jigai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/nafistiham/jigai/actions/workflows/ci.yml"><img src="https://github.com/nafistiham/jigai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS only">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
 </p>
 
 ---
@@ -25,36 +24,93 @@ jigai watch claude
 
 ---
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [The Problem](#the-problem)
+- [How JigAi Is Different](#how-jigai-is-different)
+- [How It Works](#how-it-works)
+- [Quick Start](#quick-start)
+- [Supported Tools](#supported-tools)
+- [Notification Setup](#notification-setup)
+- [Known Issues and Caveats](#known-issues-and-caveats)
+- [Configuration](#configuration)
+- [Commands](#commands)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Publishing to PyPI](#publishing-to-pypi)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Prerequisites
+
+- **macOS** — notifications use macOS APIs. Linux and Windows support is planned.
+- **Python 3.10 or later**
+- **[terminal-notifier](https://github.com/julienXX/terminal-notifier)** (strongly recommended) — required for banner popup notifications. Without it, notifications land silently in Notification Center.
+
+```bash
+brew install terminal-notifier
+```
+
+---
+
 ## The Problem
 
 You kick off Claude Code on a big refactor, switch to your browser to research something, and come back 20 minutes later to find it asked a clarifying question in the first 30 seconds. You just wasted 20 minutes.
 
-Every AI coding tool has this problem. None of them have a universal solution. Hook-based approaches require per-tool configuration that breaks across versions. Cloud notification services require accounts, subscriptions, or trusting a third party with your terminal output.
+Every AI coding tool has this problem. Existing solutions all have significant limitations:
+
+- **Hook-based tools** (Claude Code Notifier, ntfy integrations) require per-tool configuration that breaks across versions and doesn't work with tools that don't have hooks.
+- **Cloud notification services** (Pushover, ntfy.sh) require accounts, subscriptions, or sending your terminal output to a third-party server.
+- **Terminal replacements** (cmux) require abandoning your existing terminal setup.
 
 **JigAi** fixes this with a single transparent PTY proxy that watches any terminal output, detects idle patterns, and notifies you — locally, privately, instantly.
 
 ---
 
+## How JigAi Is Different
+
+| Feature | ntfy / Pushover | Claude Code Notifier | cmux | JigAi |
+|---|:---:|:---:|:---:|:---:|
+| Works with **any** AI tool | ❌ manual wiring | ❌ Claude Code only | ✅ via hooks | ✅ auto-detect |
+| **No per-tool config** needed | ❌ | ❌ | ❌ hooks required | ✅ |
+| **Auto-detects** idle state | ❌ | ❌ hook-triggered | ❌ | ✅ |
+| macOS notifications | ✅ | ✅ | ✅ | ✅ |
+| **LAN mobile push** (no cloud) | ❌ cloud | ❌ | ❌ | ✅ |
+| Works in **any terminal** | ✅ | ✅ | ❌ is the terminal | ✅ |
+| **Free and open source** | ✅ ntfy | ❌ | ❌ | ✅ |
+| **Privacy-first** (LAN only) | ❌ cloud | ✅ | ✅ | ✅ |
+
+---
+
 ## How It Works
 
-JigAi wraps your AI tool in a **PTY (pseudo-terminal) proxy**. Your tool runs exactly as normal — same colors, same interactivity, same behavior. JigAi intercepts the output stream silently:
+JigAi wraps your AI tool in a **PTY (pseudo-terminal) proxy**. Your tool runs exactly as normal — same colors, same interactivity, same behavior. JigAi intercepts the output stream silently in the background:
 
 ```
 You type:  jigai watch claude
-           │
-           ▼
-    ┌──────────────────┐
-    │   JigAi Watcher  │  ← sits here transparently
-    │   (PTY proxy)    │
-    └────────┬─────────┘
-             │ passes all I/O through unchanged
-             ▼
-    ┌──────────────────┐
-    │   Claude Code    │  ← behaves exactly as if launched directly
-    └──────────────────┘
+                │
+                ▼
+     ┌──────────────────────┐
+     │    JigAi Watcher     │  ← sits here transparently
+     │    (PTY proxy)       │
+     └──────────┬───────────┘
+                │  all I/O passed through unchanged
+                ▼
+     ┌──────────────────────┐
+     │     Claude Code      │  ← behaves as if launched directly
+     └──────────────────────┘
 ```
 
-When idle is detected (via pattern match or timeout), JigAi fires:
+Idle detection uses three layers in order:
+1. **Pattern match** — recognizes the idle prompt for known tools instantly
+2. **Timeout fallback** — no output for N seconds = idle (works with any tool)
+3. **Cooldown** — suppresses repeated notifications during a single idle period
+
+When idle is detected, JigAi fires:
 1. A **macOS notification** with the last meaningful output line
 2. A **WebSocket push** to the JigAi server (if running)
 3. Your phone receives the notification via the LAN server *(mobile app coming in v0.2)*
@@ -67,15 +123,10 @@ When idle is detected (via pattern match or timeout), JigAi fires:
 
 ```bash
 pip install jigai
+brew install terminal-notifier   # recommended — enables banner popups
 ```
 
-For richer notifications (banner popups instead of silent NC delivery):
-
-```bash
-brew install terminal-notifier
-```
-
-> See [Notification Setup](#notification-setup) for macOS configuration steps.
+See [Notification Setup](#notification-setup) for the one-time macOS configuration required.
 
 ### 2. Watch a tool
 
@@ -95,28 +146,28 @@ jigai watch aider
 # Any arbitrary command
 jigai watch -- python my_agent.py
 
-# Override tool detection (for custom prompts)
+# Override tool name (custom idle prompts)
 jigai watch --tool my_agent -- python agent.py
 ```
 
 ### 3. (Optional) Start the server for LAN mobile push
 
 ```bash
-# Terminal 1 — keep the server running
+# Terminal 1 — keep the server running in the background
 jigai server start
 
 # Terminal 2 — watch your tool as normal
 jigai watch claude
 ```
 
-That's it. When Claude Code goes idle, you get notified.
+That's it. When your AI tool goes idle, you get notified.
 
 ---
 
 ## Supported Tools
 
-| Tool | Detection Method | Status |
-|------|-----------------|--------|
+| Tool | Detection | Notes |
+|------|-----------|-------|
 | Claude Code | Pattern + timeout | Built-in |
 | OpenAI Codex CLI | Pattern + timeout | Built-in |
 | Gemini CLI | Pattern + timeout | Built-in |
@@ -124,87 +175,84 @@ That's it. When Claude Code goes idle, you get notified.
 | OpenCode | Pattern + timeout | Built-in |
 | Any custom tool | User-defined regex | Via `~/.jigai/patterns.yaml` |
 
-JigAi also has a **timeout fallback**: if no output is received for `timeout_seconds` (default: 30s), it fires regardless of pattern matching. This means it works with any tool, even ones not in the list above.
+The **timeout fallback** (default: 30s of silence = idle) means JigAi works with any tool out of the box, even ones not listed above.
 
 ---
 
 ## Notification Setup
 
-JigAi uses two delivery mechanisms. Both are attempted in order:
+JigAi tries two delivery mechanisms in order:
 
-### 1. `terminal-notifier` (Recommended — banner popups)
+### 1. `terminal-notifier` — Recommended
 
-Install via Homebrew:
+Enables proper banner popup notifications.
 
 ```bash
 brew install terminal-notifier
 ```
 
-Then configure macOS to show banners:
+**One-time macOS configuration:**
 
 1. Open **System Settings → Notifications → terminal-notifier**
-2. Enable **Allow Notifications**
-3. Check **Desktop** (required for banner popups)
-4. Set **Alert Style** to **Persistent** (stays until dismissed) or **Temporary** (auto-dismisses)
-5. Enable **Play sound for notification**
+2. Toggle **Allow Notifications** ON
+3. Check **Desktop** *(required for the popup to appear on screen)*
+4. Set **Alert Style** → **Persistent** (stays until dismissed) or **Temporary** (auto-dismisses after a few seconds)
+5. Toggle **Play sound for notification** ON
 
-### 2. `osascript` (Fallback — no installation required)
+### 2. `osascript` — Fallback
 
-If `terminal-notifier` is not installed, JigAi falls back to macOS's built-in `osascript`. Notifications will appear in **Notification Center** but may not show as banner popups, depending on your macOS version and Script Editor's notification settings.
-
-> **Recommendation:** Install `terminal-notifier` for the best experience.
+No installation required. Notifications appear in **Notification Center** but may not show as popup banners on macOS Sequoia (15.x). See [Known Issues](#known-issues-and-caveats).
 
 ---
 
 ## Known Issues and Caveats
 
-Read this section before filing a bug report — most common issues are documented here.
+Read this before filing a bug — most common issues are documented here.
 
-### Focus Mode blocks banner notifications
+---
 
-**Symptom:** Notifications appear in Notification Center but the banner popup never shows, even with correct settings.
+### Focus Mode silences banner popups
 
-**Cause:** macOS Focus Mode (Do Not Disturb, Work, Personal, etc.) silences notification banners from apps not explicitly allowed.
+**Symptom:** Notification appears in Notification Center, but the banner popup never shows — even with all settings correct.
+
+**Cause:** macOS Focus (Do Not Disturb, Work, Personal, etc.) blocks notification banners from apps not on the allow list.
 
 **Fix:**
-1. Open **System Settings → Focus**
-2. Select your active Focus profile
-3. Under **Allowed Notifications → Apps**, add **terminal-notifier**
+1. **System Settings → Focus** → select your active Focus profile
+2. **Allowed Notifications → Apps** → add **terminal-notifier**
 
-This is a one-time setup per Focus profile. Once allowed, banners will appear even when Focus is active.
+One-time setup per Focus profile. This is the most common reason banners don't show.
 
 ---
 
 ### `terminal-notifier` on macOS Sequoia (15.x)
 
-**Symptom:** Notifications appear in Notification Center but never pop as banners, or `terminal-notifier` produces no output at all.
+**Symptom:** Notifications appear in Notification Center but never pop as banners, or no notifications appear at all.
 
-**Cause:** `terminal-notifier` has known compatibility issues on macOS Sequoia 15, particularly on M-series chips ([issue #312](https://github.com/julienXX/terminal-notifier/issues/312)). The binary is not updated for the newer UserNotifications framework in Sequoia.
+**Cause:** `terminal-notifier` has a [known compatibility issue on macOS 15](https://github.com/julienXX/terminal-notifier/issues/312), particularly on M-series chips. It predates the UserNotifications framework changes in Sequoia.
 
-**Workarounds:**
-- Try resetting the notification registration:
-  ```bash
-  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -kill -r -domain local -domain system -domain user
-  ```
-  Then re-open System Settings → Notifications → terminal-notifier and re-enable.
-- If still broken, notifications will still land in Notification Center via the `osascript` fallback — you just won't get the popup banner.
-- A native Swift notification backend is planned for v0.2 that will resolve this permanently.
+**Workarounds (try in order):**
 
----
+1. Make sure Focus mode isn't blocking it (see above) — this is the cause 90% of the time.
 
-### Display mirroring / screen sharing
+2. Reset the notification registration cache:
+   ```bash
+   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+     -kill -r -domain local -domain system -domain user
+   ```
+   Then re-open System Settings → Notifications → terminal-notifier and re-enable.
 
-**Symptom:** Notifications don't show on the desktop while screen sharing or mirroring.
+3. If banners still don't appear, notifications will still land in **Notification Center** via the `osascript` fallback — you won't get the popup, but the sound will still play.
 
-**Fix:** System Settings → Notifications → enable **"Allow notifications when mirroring or sharing the display"**
+A native Swift notification backend is planned for v0.2 which will resolve this permanently.
 
 ---
 
 ### Notifications fire while you're at the terminal
 
-By default, JigAi will fire a notification even if you're actively looking at the terminal. This is intentional — the sound alone can be useful as a cue.
+**By default this is intentional** — the sound cue is useful even when you're looking at the screen.
 
-To suppress notifications when a terminal window is focused:
+To suppress notifications when any terminal window is focused:
 
 ```yaml
 # ~/.jigai/config.yaml
@@ -212,36 +260,42 @@ notifications:
   only_when_away: true
 ```
 
-JigAi checks the frontmost macOS application. If it's Terminal, iTerm2, Warp, Ghostty, Alacritty, Kitty, or similar, the notification is skipped. Supported terminal app names are: `terminal`, `iterm2`, `warp`, `hyper`, `alacritty`, `kitty`, `ghostty`, `tabby`, `rio`.
+JigAi checks the frontmost macOS application. If it is Terminal, iTerm2, Warp, Ghostty, Alacritty, Kitty, Hyper, Tabby, or Rio, the notification is skipped.
+
+---
+
+### Display mirroring or screen sharing
+
+**Symptom:** Notifications don't appear while screen sharing or using a mirrored display.
+
+**Fix:** System Settings → Notifications → enable **"Allow notifications when mirroring or sharing the display"**
 
 ---
 
 ### Idle fires too early or too often
 
-**Cause:** Pattern matching may trigger on output lines that superficially resemble idle prompts, especially for tools with rich TUI output.
+**Cause:** A pattern may match on output that looks like an idle prompt but isn't.
 
-**Fix:** Adjust the cooldown (minimum gap between notifications) and timeout:
+**Fix:** Raise the cooldown (minimum gap between notifications) or the timeout:
 
 ```yaml
 # ~/.jigai/config.yaml
 detection:
-  timeout_seconds: 45   # how long to wait before timeout-based idle
-  cooldown_seconds: 10  # minimum seconds between notifications
+  timeout_seconds: 45    # wait longer before timeout-based idle
+  cooldown_seconds: 10   # minimum seconds between consecutive notifications
 ```
 
-Or test which lines trigger detection:
+Debug which lines trigger detection:
 
 ```bash
-jigai config test "some terminal output line"
+jigai config test "the output line you want to test"
 ```
 
 ---
 
-### Pattern detection for Claude Code
+### Pattern detection reliability for Claude Code
 
-Claude Code renders a rich TUI with box-drawing characters and animated spinners. JigAi strips all ANSI codes and decorative Unicode before matching, and the idle prompt (`>`) is the primary pattern matched.
-
-If you find detection is unreliable, set a longer timeout:
+Claude Code renders a rich TUI with box-drawing characters and animated spinners. JigAi strips all ANSI codes and decorative Unicode before matching. If detection feels unreliable, fall back to a longer timeout:
 
 ```bash
 jigai watch --timeout 60 claude
@@ -249,49 +303,45 @@ jigai watch --timeout 60 claude
 
 ---
 
-### iOS / Android mobile notifications (LAN)
+### Mobile notifications (iOS / Android) — not yet available
 
-The mobile app is planned for **v0.2**. Currently, `jigai server start` runs a WebSocket server that a future React Native app will connect to.
+The mobile app is planned for **v0.2**. `jigai server start` runs the WebSocket server that the React Native app will connect to — the server-side is already live.
 
-iOS note: iOS aggressively terminates background WebSocket connections. When the mobile app is built, foreground/background behavior will be documented. Users on iOS may want to keep the app in the foreground or use a notification relay for reliable background delivery.
+**iOS note:** iOS aggressively suspends background WebSocket connections. The v0.2 mobile app will document foreground/background behavior in detail. For fully reliable background delivery on iOS, a push notification relay option will be offered as an opt-in.
 
 ---
 
 ## Configuration
 
-### Config file: `~/.jigai/config.yaml`
-
-Initialize with defaults:
+Initialize the config file with defaults:
 
 ```bash
 jigai config init
 ```
 
-Full reference:
+### `~/.jigai/config.yaml` — full reference
 
 ```yaml
 server:
   port: 9384          # LAN server port
-  bind: "0.0.0.0"    # Bind address
+  bind: "0.0.0.0"    # Bind address (0.0.0.0 = all interfaces)
 
 notifications:
   macos: true                   # Enable macOS notifications
-  only_when_away: false         # Skip if a terminal is the frontmost app
-  sound: "Ping"                 # macOS sound name (Ping, Basso, Funk, etc.)
-  group_by_session: true        # Group notifications per session
-  show_last_output: true        # Include last output in notification body
-  output_lines: 3               # Lines of output to include
-  redact_patterns:              # Auto-redact sensitive info from notifications
+  only_when_away: false         # Skip notification if a terminal is focused
+  sound: "Ping"                 # macOS sound name: Ping, Basso, Funk, Glass, etc.
+  group_by_session: true        # Group notifications per session in NC
+  show_last_output: true        # Include last meaningful output line in body
+  output_lines: 3               # Lines of terminal context to capture
+  redact_patterns:              # Patterns auto-redacted from notification body
     - '(?i)(token|password|secret|key|api_key)=\S+'
 
 detection:
-  timeout_seconds: 30    # Timeout-based idle threshold
-  cooldown_seconds: 5    # Minimum gap between notifications
+  timeout_seconds: 30    # Silence threshold for timeout-based idle
+  cooldown_seconds: 5    # Minimum gap between consecutive notifications
 ```
 
-### Custom patterns: `~/.jigai/patterns.yaml`
-
-Add your own tools or override built-in patterns:
+### `~/.jigai/patterns.yaml` — custom tool patterns
 
 ```yaml
 custom_tools:
@@ -303,7 +353,7 @@ custom_tools:
       - '(?i)what would you like'
 
 overrides:
-  timeout_seconds: 45    # Override global timeout
+  timeout_seconds: 45
 ```
 
 ---
@@ -311,26 +361,26 @@ overrides:
 ## Commands
 
 ```bash
-# Watch commands
+# Watching
 jigai watch <cmd>                # Wrap a command, notify on idle
 jigai watch --tool <key> <cmd>  # Override tool auto-detection
 jigai watch --timeout 60 <cmd>  # Override idle timeout
-jigai watch --no-notify <cmd>   # Disable macOS notifications
+jigai watch --no-notify <cmd>   # Disable macOS notifications for this session
 jigai watch --no-server <cmd>   # Don't push events to the server
 
-# Server (for mobile / LAN notifications)
-jigai server start               # Start server on default port 9384
+# Server (LAN / mobile notifications)
+jigai server start               # Start on default port 9384
 jigai server start --port 8080   # Custom port
 jigai server status              # Check if server is running
 
-# Configuration
-jigai config init                # Create default ~/.jigai/config.yaml
-jigai config show                # Dump current configuration as JSON
-jigai config test "<line>"       # Test if a line matches any pattern
+# Config
+jigai config init                # Create ~/.jigai/config.yaml with defaults
+jigai config show                # Print current configuration as JSON
+jigai config test "<line>"       # Test if a line matches any idle pattern
 
 # Info
-jigai patterns                   # Show all loaded patterns and timeouts
-jigai sessions                   # List active sessions (requires server)
+jigai patterns                   # Show all loaded patterns and timeout settings
+jigai sessions                   # List active sessions (requires server running)
 jigai --version                  # Print version
 ```
 
@@ -339,36 +389,35 @@ jigai --version                  # Print version
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    jigai watch claude                    │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│   stdin ──▶ PTY Proxy ──▶ Claude Code                  │
-│             (pty_proxy)    (child proc)                  │
-│                │                                         │
-│   stdout ◀─── │ ──────────────────────────────────────  │
-│                │                                         │
-│                ▼                                         │
-│        Idle Detector                                     │
-│        (detector.py)                                     │
-│         • ANSI strip                                     │
-│         • Pattern match ──▶ match found ──┐              │
-│         • Timeout check ──▶ N seconds ────┤              │
-│                                           ▼              │
-│                                    Notification          │
-│                               ┌──────────────────┐      │
-│                               │ macOS banner     │      │
-│                               │ (terminal-notif) │      │
-│                               │ Server push      │      │
-│                               │ (WebSocket/HTTP) │      │
-│                               └──────────────────┘      │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                   jigai watch claude                     │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│   stdin  ──▶  PTY Proxy  ──▶  Claude Code               │
+│               (pty_proxy)      (child process)           │
+│                   │                                      │
+│   stdout  ◀───────┤ (passed through unchanged)           │
+│                   │                                      │
+│                   ▼                                      │
+│           Idle Detector                                  │
+│           (detector.py)                                  │
+│            • strip ANSI / box-drawing chars              │
+│            • pattern match ──▶ match found ──┐           │
+│            • timeout check ──▶ N seconds ────┤           │
+│                                              ▼           │
+│                                     ┌────────────────┐   │
+│                                     │ macOS banner   │   │
+│                                     │ (terminal-nf.) │   │
+│                                     │ Server push    │   │
+│                                     │ (HTTP → WS)   │   │
+│                                     └────────────────┘   │
+└──────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────┐
 │  jigai server start              │
 │  FastAPI + WebSocket             │
 │  mDNS/Bonjour broadcast          │──▶  Mobile App (v0.2)
-│  REST API for session tracking   │     (React Native, LAN)
+│  REST API for session tracking   │     React Native, LAN-only
 └──────────────────────────────────┘
 ```
 
@@ -381,43 +430,34 @@ git clone https://github.com/nafistiham/jigai.git
 cd jigai
 pip install -e ".[dev]"
 
-# Run tests
-pytest
-
-# Lint
-ruff check .
-
-# Type check
-mypy jigai/
+pytest                  # run tests
+ruff check .            # lint
+mypy jigai/             # type check
 ```
 
 ### Project Structure
 
 ```
-jigai/
-├── jigai/
-│   ├── cli.py            # Typer CLI entry point
-│   ├── config.py         # Config management (Pydantic + YAML)
-│   ├── models.py         # Session and IdleEvent data models
+jigai/                       ← repo root
+├── jigai/                   ← Python package
+│   ├── cli.py               # Typer CLI entry point
+│   ├── config.py            # Config management (Pydantic + YAML)
+│   ├── models.py            # Session and IdleEvent data models
 │   ├── notifier/
-│   │   └── macos.py      # macOS notifications (osascript + terminal-notifier)
+│   │   └── macos.py         # macOS notifications (osascript + terminal-notifier)
 │   ├── server/
-│   │   ├── app.py        # FastAPI REST + WebSocket server
-│   │   ├── client.py     # HTTP client (watcher → server)
-│   │   ├── discovery.py  # mDNS/Bonjour service broadcasting
-│   │   └── ws_manager.py # WebSocket connection manager
+│   │   ├── app.py           # FastAPI REST + WebSocket server
+│   │   ├── client.py        # HTTP client (watcher → server push)
+│   │   ├── discovery.py     # mDNS/Bonjour service broadcasting
+│   │   └── ws_manager.py    # WebSocket connection manager
 │   └── watcher/
-│       ├── detector.py   # Idle detection engine
-│       ├── patterns.py   # Pattern registry and loader
-│       ├── pty_proxy.py  # Transparent PTY proxy
-│       └── watcher.py    # Session orchestrator
+│       ├── detector.py      # Idle detection engine
+│       ├── patterns.py      # Pattern registry and loader
+│       ├── pty_proxy.py     # Transparent PTY proxy
+│       └── watcher.py       # Session orchestrator
 ├── patterns/
-│   └── defaults.yaml     # Built-in tool patterns
+│   └── defaults.yaml        # Built-in tool patterns
 └── tests/
-    ├── test_config.py
-    ├── test_detector.py
-    ├── test_models.py
-    └── test_patterns.py
 ```
 
 ---
@@ -426,41 +466,94 @@ jigai/
 
 > For maintainers.
 
+### First release
+
+PyPI's **Trusted Publishing** requires the project to be registered before it can be used. The cleanest first-publish flow:
+
+**Option A — Pending Publisher (no manual upload needed):**
+1. Register at [pypi.org](https://pypi.org/account/register)
+2. Go to [pypi.org/manage/account/publishing](https://pypi.org/manage/account/publishing)
+3. Under **"Add a new pending publisher"**, fill in:
+   - PyPI project name: `jigai`
+   - Owner: `nafistiham`, Repository: `jigai`
+   - Workflow filename: `publish.yml`
+   - Environment: `release`
+4. Create a GitHub Release with tag `v0.1.0` — the workflow will create the PyPI project and publish in one step.
+
+**Option B — Manual first upload, then Trusted Publishing for subsequent releases:**
+```bash
+pip install build twine
+python -m build
+twine upload dist/*          # prompts for PyPI credentials
+```
+Then set up Trusted Publishing on your existing project for future releases.
+
+### Subsequent releases
+
 1. Bump `version` in `pyproject.toml`
 2. Create a GitHub Release with tag `vX.Y.Z`
-3. The [CI workflow](.github/workflows/publish.yml) auto-publishes to PyPI via Trusted Publishing
-
-For the first publish, set up Trusted Publishing on PyPI:
-1. Go to pypi.org → your project → **Publishing**
-2. Add a trusted publisher: owner `nafistiham`, repo `jigai`, workflow `publish.yml`, environment `release`
+3. The [publish workflow](.github/workflows/publish.yml) runs automatically via Trusted Publishing — no tokens to manage.
 
 ---
 
 ## Roadmap
 
-- [x] v0.1 — CLI + PTY proxy + idle detection + macOS notifications + LAN server
-- [ ] v0.2 — React Native mobile app (iOS + Android), daemon mode
-- [ ] v0.3 — Homebrew formula, Linux support (libnotify)
-- [ ] v0.4 — Native Swift notification backend (Sequoia fix), web dashboard
-- [ ] Future — Slack/Discord webhooks, Windows toast notifications
+- [x] **v0.1** — CLI · PTY proxy · idle detection · macOS notifications · LAN WebSocket server
+- [ ] **v0.2** — React Native mobile app (iOS + Android) · daemon mode
+- [ ] **v0.3** — Homebrew formula · Linux support (libnotify)
+- [ ] **v0.4** — Native Swift notification backend (fixes Sequoia) · web dashboard
+- [ ] **Future** — Slack/Discord webhooks · Windows toast notifications
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a PR for non-trivial changes so we can discuss the approach.
+Contributions are welcome. For non-trivial changes, please open an issue first so we can align on the approach before you invest time writing code.
+
+### Branch strategy
+
+```
+main       ← stable, matches latest release
+develop    ← integration branch, target for PRs
+feat/*     ← feature branches, branched from develop
+fix/*      ← bug fix branches, branched from develop
+```
+
+Always open PRs against **`develop`**, not `main`.
+
+### Workflow
 
 ```bash
-# Fork, clone, create a branch
+# Fork the repo, then:
+git clone https://github.com/<your-username>/jigai.git
+cd jigai
+git checkout develop
 git checkout -b feat/your-feature
 
-# Make changes, add tests
-pytest
+pip install -e ".[dev]"
 
-# Lint
+# Make changes, write tests
+pytest
 ruff check .
 
-# Open a PR against develop
+# Commit using conventional commits
+git commit -m "feat(watcher): add support for foo tool"
+git commit -m "fix(notifier): handle edge case on Sonoma"
+git commit -m "docs: update custom patterns example"
+
+git push -u origin feat/your-feature
+# Open a PR → base: develop
+```
+
+### Commit convention
+
+```
+feat(scope):  new feature
+fix(scope):   bug fix
+docs:         documentation only
+test:         tests only
+ci:           CI/CD changes
+chore:        build, config, tooling
 ```
 
 ---
