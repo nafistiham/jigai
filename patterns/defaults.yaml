@@ -1,0 +1,57 @@
+# JigAi — Built-in idle detection patterns
+# These patterns match the idle/prompt state of known AI coding tools.
+# Patterns are tested against each line of terminal output (ANSI codes stripped).
+#
+# To add your own patterns, create ~/.jigai/patterns.yaml
+# See: https://github.com/jigai/jigai#custom-patterns
+
+tools:
+  claude_code:
+    name: "Claude Code"
+    idle_patterns:
+      # Claude Code prompt patterns
+      - '>>\s*$'                              # Claude Code's >> prompt
+      - '^\s*>\s*$'                           # Simple > prompt
+      - '(?i)waiting for.*input'
+      - '(?i)what would you like'
+      - '(?i)how can i help'
+      - '\$\s*$'                              # Shell-like prompt after completion
+
+  codex:
+    name: "OpenAI Codex CLI"
+    idle_patterns:
+      - '(?i)codex>\s*$'
+      - '(?i)what would you like'
+      - '(?i)enter a command'
+      - '(?i)how can i help'
+
+  gemini_cli:
+    name: "Gemini CLI"
+    idle_patterns:
+      - '(?i)gemini>\s*$'
+      - '(?i)what would you like'
+      - '(?i)how can i help'
+
+  aider:
+    name: "Aider"
+    idle_patterns:
+      - '(?i)aider>\s*$'
+      - '(?i)what change.*would you like'
+
+  opencode:
+    name: "OpenCode"
+    idle_patterns:
+      - '(?i)opencode>\s*$'
+
+  generic:
+    name: "Generic AI Agent"
+    idle_patterns:
+      # Common patterns across many agents
+      - '(?i)press enter to continue'
+      - '(?i)\(y/n\)\s*$'
+      - '(?i)\[y/N\]\s*$'
+      - '(?i)\[Y/n\]\s*$'
+
+defaults:
+  timeout_seconds: 30
+  cooldown_seconds: 5
