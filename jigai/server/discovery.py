@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import socket
-from typing import Optional
 
 from rich.console import Console
+
+from jigai import __version__
 
 console = Console(stderr=True)
 
@@ -46,7 +47,7 @@ class ServiceBroadcaster:
                 addresses=[socket.inet_aton(local_ip)],
                 port=self.port,
                 properties={
-                    "version": "0.1.0",
+                    "version": __version__,
                     "hostname": hostname,
                 },
                 server=f"{hostname}.local.",
