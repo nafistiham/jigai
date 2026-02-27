@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
-from typing import Optional
 
 from rich.console import Console
 
 from jigai.config import JigAiConfig, load_config
 from jigai.models import IdleEvent, Session, SessionStatus
-from jigai.watcher.detector import Detector, strip_ansi
+from jigai.watcher.detector import Detector
 from jigai.watcher.patterns import PatternRegistry, detect_tool_from_command, load_patterns
 from jigai.watcher.pty_proxy import PtyProxy
 
 console = Console(stderr=True)
+
+# Compiled once at import time for _last_meaningful_line
+_SEPARATOR_RE = re.compile(r"^[\s\u2500-\u257F\-=_|*~\u2014\u2013]+$")
+_DECOR_RE = re.compile(r"[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF\u2600-\u26FF●✻⚡✓►▶⚠\-─━╭╮╰╯│]")
+_HAS_ALPHA = re.compile(r"[a-zA-Z]{3,}")
 
 
 class Watcher:
@@ -29,10 +34,10 @@ class Watcher:
     def __init__(
         self,
         command: list[str],
-        tool_override: Optional[str] = None,
-        config: Optional[JigAiConfig] = None,
-        registry: Optional[PatternRegistry] = None,
-        on_idle_event: Optional[callable] = None,
+        tool_override: str | None = None,
+        config: JigAiConfig | None = None,
+        registry: PatternRegistry | None = None,
+        on_idle_event: callable | None = None,
     ):
         self.command = command
         self.config = config or load_config()
@@ -70,7 +75,7 @@ class Watcher:
         self.detector.set_redact_patterns(self.config.notifications.redact_patterns)
 
         # Timeout checker thread
-        self._timeout_thread: Optional[threading.Thread] = None
+        self._timeout_thread: threading.Thread | None = None
         self._running = False
 
     def _handle_output(self, data: bytes) -> None:
@@ -122,22 +127,24 @@ class Watcher:
         if self.config.notifications.macos:
             from jigai.notifier.macos import is_terminal_focused, notify_macos
 
-            if self.config.notifications.only_when_away and is_terminal_focused():
-                return  # User is looking at a terminal — skip notification
+            if not (self.config.notifications.only_when_away and is_terminal_focused()):
+                subtitle = f"Session: {self.session.to_display_name()}"
+                body = _last_meaningful_line(last_output) if last_output else ""
+                if self.session.working_dir:
+                    dir_short = _shorten_path(self.session.working_dir)
+                    body = f"{body}\n{dir_short}" if body else dir_short
 
-            subtitle = f"Session: {self.session.to_display_name()}"
-            body = _last_meaningful_line(last_output) if last_output else ""
-            if self.session.working_dir:
-                dir_short = _shorten_path(self.session.working_dir)
-                body = f"{body}\n{dir_short}" if body else dir_short
-
-            notify_macos(
-                title=f"{tool_name} is waiting",
-                message=body,
-                subtitle=subtitle,
-                sound=self.config.notifications.sound,
-                group=self.session.session_id if self.config.notifications.group_by_session else None,
-            )
+                notify_macos(
+                    title=f"{tool_name} is waiting",
+                    message=body,
+                    subtitle=subtitle,
+                    sound=self.config.notifications.sound,
+                    group=(
+                        self.session.session_id
+                        if self.config.notifications.group_by_session
+                        else None
+                    ),
+                )
 
         # External callback (for server push)
         if self._on_idle_event:
@@ -182,8 +189,8 @@ class Watcher:
             command=self.command,
             on_output=self._handle_output,
             on_exit=self._handle_exit,
+            on_spawn=lambda pid: setattr(self.session, "pid", pid),
         )
-        self.session.pid = proxy.child_pid
 
         try:
             exit_code = proxy.run()
@@ -204,14 +211,6 @@ def _last_meaningful_line(text: str) -> str:
     This skips those and strips decorative characters, returning only
     lines with actual human-readable text.
     """
-    import re
-    # Pure separator lines — skip entirely
-    _SEPARATOR_RE = re.compile(r"^[\s\u2500-\u257F\-=_|*~\u2014\u2013]+$")
-    # Decorative chars to strip from inside meaningful lines
-    _DECOR_RE = re.compile(r"[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF\u2600-\u26FF●✻⚡✓►▶⚠\-─━╭╮╰╯│]")
-    # A line is only meaningful if it has 3+ consecutive letters after cleaning
-    _HAS_ALPHA = re.compile(r"[a-zA-Z]{3,}")
-
     for line in reversed(text.split("\n")):
         stripped = line.strip()
         if not stripped or _SEPARATOR_RE.match(stripped):
