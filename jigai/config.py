@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
-
 
 JIGAI_DIR = Path.home() / ".jigai"
 CONFIG_FILE = JIGAI_DIR / "config.yaml"
@@ -17,7 +15,7 @@ DAEMON_PID_FILE = JIGAI_DIR / "daemon.pid"
 LOG_DIR = JIGAI_DIR / "logs"
 
 # Bundled defaults shipped with the package
-BUILTIN_PATTERNS_FILE = Path(__file__).parent.parent / "patterns" / "defaults.yaml"
+BUILTIN_PATTERNS_FILE = Path(__file__).parent / "patterns" / "defaults.yaml"
 
 
 class NotificationConfig(BaseModel):
