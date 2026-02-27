@@ -450,13 +450,13 @@ jigai/                       ← repo root
 │   │   ├── client.py        # HTTP client (watcher → server push)
 │   │   ├── discovery.py     # mDNS/Bonjour service broadcasting
 │   │   └── ws_manager.py    # WebSocket connection manager
+│   ├── patterns/
+│   │   └── defaults.yaml    # Built-in tool patterns (shipped with package)
 │   └── watcher/
 │       ├── detector.py      # Idle detection engine
 │       ├── patterns.py      # Pattern registry and loader
 │       ├── pty_proxy.py     # Transparent PTY proxy
 │       └── watcher.py       # Session orchestrator
-├── patterns/
-│   └── defaults.yaml        # Built-in tool patterns
 └── tests/
 ```
 
