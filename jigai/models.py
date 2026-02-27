@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,8 +39,8 @@ class Session(BaseModel):
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: SessionStatus = SessionStatus.ACTIVE
     last_output: str = ""
-    last_idle_event: Optional[IdleEvent] = None
-    pid: Optional[int] = None
+    last_idle_event: IdleEvent | None = None
+    pid: int | None = None
 
     def to_display_name(self) -> str:
         """Short display name for the session."""

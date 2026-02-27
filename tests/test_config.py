@@ -1,8 +1,7 @@
 """Tests for configuration management."""
 
-import pytest
 
-from jigai.config import JigAiConfig, NotificationConfig, DetectionConfig, ServerConfig
+from jigai.config import DetectionConfig, JigAiConfig, NotificationConfig, ServerConfig
 
 
 class TestJigAiConfig:

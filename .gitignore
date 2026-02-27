@@ -32,3 +32,6 @@ Thumbs.db
 
 # JigAi runtime
 .jigai/
+
+# Claude Code
+.claude/

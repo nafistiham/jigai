@@ -2,11 +2,8 @@
 
 import time
 
-import pytest
-
 from jigai.watcher.detector import Detector, strip_ansi
 from jigai.watcher.patterns import PatternRegistry, ToolPattern, _compile_patterns
-
 
 # ── Helpers ─────────────────────────────────────────────────
 

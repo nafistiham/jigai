@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional
 
 from jigai.config import BUILTIN_PATTERNS_FILE, USER_PATTERNS_FILE, load_yaml
 
@@ -31,7 +29,7 @@ class PatternRegistry:
     timeout_seconds: int = 30
     cooldown_seconds: int = 5
 
-    def match_any(self, line: str) -> Optional[str]:
+    def match_any(self, line: str) -> str | None:
         """Check if a line matches any tool's idle pattern. Returns tool key or None."""
         for key, tool in self.tools.items():
             if tool.matches(line):

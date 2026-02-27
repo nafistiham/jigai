@@ -5,11 +5,10 @@ from __future__ import annotations
 import re
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from jigai.watcher.patterns import PatternRegistry
-
 
 # Regex to strip ANSI escape codes from terminal output
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b\[.*?[@-~]")
@@ -28,7 +27,7 @@ class DetectorState:
     last_idle_notification: float = 0.0
     output_buffer: deque = field(default_factory=lambda: deque(maxlen=50))
     is_idle: bool = False
-    detected_tool: Optional[str] = None
+    detected_tool: str | None = None
 
 
 class Detector:
@@ -43,7 +42,7 @@ class Detector:
         self,
         registry: PatternRegistry,
         on_idle: Callable[[str, str, float, list[str]], None],
-        tool_hint: Optional[str] = None,
+        tool_hint: str | None = None,
     ):
         """
         Args:

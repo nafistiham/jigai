@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import sys
-from typing import Optional
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -52,7 +48,7 @@ def watch(
         ...,
         help="Command to watch (e.g., 'claude', 'codex', 'python agent.py').",
     ),
-    tool: Optional[str] = typer.Option(
+    tool: str | None = typer.Option(
         None,
         "--tool",
         "-t",
@@ -68,7 +64,7 @@ def watch(
         "--no-server",
         help="Don't push events to JigAi server.",
     ),
-    timeout: Optional[int] = typer.Option(
+    timeout: int | None = typer.Option(
         None,
         "--timeout",
         help="Override idle timeout in seconds.",
@@ -108,7 +104,8 @@ def watch(
             )
         else:
             console.print(
-                "[dim]  Server: Not running (use 'jigai server start' for mobile notifications)[/dim]"
+                "[dim]  Server: Not running "
+                "(use 'jigai server start' for mobile notifications)[/dim]"
             )
 
     def on_idle_event(event: IdleEvent) -> None:
@@ -163,7 +160,7 @@ def server_start(
     from jigai.server.discovery import get_local_ip
 
     local_ip = get_local_ip()
-    console.print(f"\n[bold cyan]⚡ JigAi Server[/bold cyan]")
+    console.print("\n[bold cyan]⚡ JigAi Server[/bold cyan]")
     console.print(f"  [dim]Local:   http://localhost:{port}[/dim]")
     console.print(f"  [dim]Network: http://{local_ip}:{port}[/dim]")
     console.print(f"  [dim]WS:      ws://{local_ip}:{port}/ws[/dim]")
