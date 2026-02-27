@@ -11,9 +11,8 @@ import signal
 import struct
 import sys
 import termios
-import time
 import tty
-from typing import Callable, Optional
+from collections.abc import Callable
 
 
 def _set_nonblocking(fd: int) -> None:
@@ -50,24 +49,27 @@ class PtyProxy:
         self,
         command: list[str],
         on_output: Callable[[bytes], None],
-        on_exit: Optional[Callable[[int], None]] = None,
+        on_exit: Callable[[int], None] | None = None,
+        on_spawn: Callable[[int], None] | None = None,
     ):
         """
         Args:
             command: Command + args to spawn (e.g., ["claude"]).
             on_output: Called with raw bytes from child stdout.
             on_exit: Called with exit code when child terminates.
+            on_spawn: Called with child PID immediately after fork.
         """
         self.command = command
         self.on_output = on_output
         self.on_exit = on_exit
-        self._master_fd: Optional[int] = None
-        self._child_pid: Optional[int] = None
+        self.on_spawn = on_spawn
+        self._master_fd: int | None = None
+        self._child_pid: int | None = None
         self._running = False
-        self._old_termios: Optional[list] = None
+        self._old_termios: list | None = None
 
     @property
-    def child_pid(self) -> Optional[int]:
+    def child_pid(self) -> int | None:
         return self._child_pid
 
     def run(self) -> int:
@@ -109,11 +111,18 @@ class PtyProxy:
             if slave_fd > 2:
                 os.close(slave_fd)
 
-            # Execute the command
-            os.execvp(self.command[0], self.command)
+            # Execute the command — os._exit(127) if exec fails so we never
+            # fall through into the parent code path
+            try:
+                os.execvp(self.command[0], self.command)
+            except OSError:
+                os._exit(127)
 
         # === PARENT PROCESS ===
         os.close(slave_fd)
+
+        if self.on_spawn is not None:
+            self.on_spawn(self._child_pid)
         self._running = True
 
         # Handle SIGWINCH (terminal resize)
@@ -157,7 +166,7 @@ class PtyProxy:
         while self._running:
             try:
                 rlist, _, _ = select.select([master_fd, stdin_fd], [], [], 1.0)
-            except (select.error, ValueError, OSError):
+            except (ValueError, OSError):
                 break
 
             if master_fd in rlist:
