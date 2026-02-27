@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import Optional
-
 
 _TERMINAL_APPS = {
     "terminal", "iterm2", "warp", "hyper", "alacritty",
@@ -40,9 +38,9 @@ def is_terminal_focused() -> bool:
 def notify_macos(
     title: str,
     message: str,
-    subtitle: Optional[str] = None,
+    subtitle: str | None = None,
     sound: str = "Ping",
-    group: Optional[str] = None,
+    group: str | None = None,
 ) -> None:
     """
     Send a macOS notification.
@@ -65,7 +63,7 @@ def notify_macos(
 def _notify_osascript(
     title: str,
     message: str,
-    subtitle: Optional[str] = None,
+    subtitle: str | None = None,
     sound: str = "Ping",
 ) -> None:
     """Send notification via osascript (built into macOS)."""
@@ -90,9 +88,9 @@ def _notify_osascript(
 def _notify_terminal_notifier(
     title: str,
     message: str,
-    subtitle: Optional[str] = None,
+    subtitle: str | None = None,
     sound: str = "Ping",
-    group: Optional[str] = None,
+    group: str | None = None,
 ) -> None:
     """Send notification via terminal-notifier (richer features)."""
     cmd = [
@@ -118,4 +116,4 @@ def _notify_terminal_notifier(
 def _sanitize(text: str) -> str:
     """Sanitize text for use in osascript/shell commands."""
     # Replace characters that could break AppleScript strings
-    return text.replace('"', '\\"').replace("\\", "\\\\").replace("\n", " ⏎ ")
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ⏎ ")
