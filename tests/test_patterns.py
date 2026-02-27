@@ -1,6 +1,5 @@
 """Tests for pattern loading and tool detection."""
 
-import pytest
 
 from jigai.watcher.patterns import (
     PatternRegistry,
