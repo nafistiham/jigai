@@ -11,10 +11,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from jigai.models import IdleEvent, Session, SessionStatus
+from jigai import __version__
 from jigai.server.discovery import ServiceBroadcaster
 from jigai.server.ws_manager import ConnectionManager
-
 
 # Global state
 manager = ConnectionManager()
@@ -37,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="JigAi Server",
     description="Terminal notification hub for AI coding agents",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -59,7 +58,7 @@ async def health():
     """Health check endpoint."""
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": __version__,
         "clients": manager.client_count,
         "sessions": len(sessions),
     }
@@ -180,14 +179,14 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({
             "type": "connected",
             "sessions": list(sessions.values()),
-            "server_version": "0.1.0",
+            "server_version": __version__,
         })
 
         # Keep connection alive
         while True:
             try:
                 # Wait for messages (ping/pong, or future commands)
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             except asyncio.TimeoutError:
                 # Send heartbeat
                 try:
