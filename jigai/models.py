@@ -25,6 +25,7 @@ class IdleEvent(BaseModel):
     working_dir: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_output: str = ""
+    notification_body: str = ""  # Pre-processed single line for push notifications
     idle_seconds: float = 0.0
     detection_method: str = "pattern"  # "pattern" | "timeout" | "combined"
 
