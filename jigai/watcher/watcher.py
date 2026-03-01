@@ -21,6 +21,9 @@ console = Console(stderr=True)
 _SEPARATOR_RE = re.compile(r"^[\s\u2500-\u257F\-=_|*~\u2014\u2013]+$")
 _DECOR_RE = re.compile(r"[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF\u2600-\u26FF●✻⚡✓►▶⚠\-─━╭╮╰╯│]")
 _HAS_ALPHA = re.compile(r"[a-zA-Z]{3,}")
+# Strips 3+ repeated separator chars from line edges after _DECOR_RE.
+# Python dunders (__init__) only have 2 — they are intentionally preserved.
+_EDGE_DECOR_RE = re.compile(r"^[\-_=\s]{3,}|[\-_=\s]{3,}$")
 
 
 class Watcher:
@@ -106,12 +109,16 @@ class Watcher:
         n = self.config.notifications.output_lines
         last_output = "\n".join(recent_lines[-n:]) if recent_lines else ""
 
+        # Pre-process to a single readable line (used for both macOS and mobile)
+        notification_body = _last_meaningful_line(last_output) if last_output else ""
+
         # Create idle event
         event = IdleEvent(
             session_id=self.session.session_id,
             tool_name=tool_name,
             working_dir=self.session.working_dir,
             last_output=last_output,
+            notification_body=notification_body,
             idle_seconds=idle_seconds,
             detection_method=method,
         )
@@ -129,7 +136,7 @@ class Watcher:
 
             if not (self.config.notifications.only_when_away and is_terminal_focused()):
                 subtitle = f"Session: {self.session.to_display_name()}"
-                body = _last_meaningful_line(last_output) if last_output else ""
+                body = notification_body
                 if self.session.working_dir:
                     dir_short = _shorten_path(self.session.working_dir)
                     body = f"{body}\n{dir_short}" if body else dir_short
@@ -216,6 +223,7 @@ def _last_meaningful_line(text: str) -> str:
         if not stripped or _SEPARATOR_RE.match(stripped):
             continue
         cleaned = _DECOR_RE.sub("", stripped).strip()
+        cleaned = _EDGE_DECOR_RE.sub("", cleaned).strip()
         if _HAS_ALPHA.search(cleaned):
             return cleaned
     return ""

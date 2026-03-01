@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+from jigai.models import IdleEvent
 from jigai.notifier.macos import _sanitize, is_terminal_focused
 from jigai.watcher.watcher import _last_meaningful_line, _shorten_path
 
@@ -56,6 +57,61 @@ class TestLastMeaningfulLine:
         )
         result = _last_meaningful_line(text)
         assert "plan" in result or "refactor" in result
+
+    def test_strips_leading_trailing_underscore_decoration(self):
+        # Lines like "___ Tool Output ___" should have edge underscores removed
+        text = "___ Tool Output ___"
+        result = _last_meaningful_line(text)
+        assert result == "Tool Output"
+        assert "_" not in result
+
+    def test_strips_long_underscore_run_at_edges(self):
+        # Very long underscore runs (e.g. pytest separator) should be stripped
+        text = "Some output\n___________ Running tests ___________"
+        result = _last_meaningful_line(text)
+        assert "Running tests" in result
+        assert "_" not in result
+
+    def test_preserves_python_dunder_names(self):
+        # __init__.py has only 2 underscores — should NOT be stripped
+        text = "__init__.py"
+        result = _last_meaningful_line(text)
+        assert "init" in result
+
+    def test_preserves_underscore_in_middle_of_word(self):
+        # Underscores inside a word (e.g. tool names) are kept
+        text = "Running tool: computer_use"
+        result = _last_meaningful_line(text)
+        assert "computer_use" in result
+
+    def test_only_underscore_line_is_skipped(self):
+        # A line of pure underscores should be skipped entirely
+        text = "Useful content\n___________________________"
+        result = _last_meaningful_line(text)
+        assert result == "Useful content"
+
+
+# ── Tests: IdleEvent.notification_body ──────────────────────
+
+
+class TestIdleEventNotificationBody:
+    def test_notification_body_field_exists(self):
+        event = IdleEvent(
+            session_id="abc123",
+            tool_name="Claude Code",
+            working_dir="/tmp",
+        )
+        assert hasattr(event, "notification_body")
+        assert event.notification_body == ""
+
+    def test_notification_body_can_be_set(self):
+        event = IdleEvent(
+            session_id="abc123",
+            tool_name="Claude Code",
+            working_dir="/tmp",
+            notification_body="Waiting for input",
+        )
+        assert event.notification_body == "Waiting for input"
 
 
 # ── Tests: _shorten_path ────────────────────────────────────
