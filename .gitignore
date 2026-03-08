@@ -33,8 +33,8 @@ Thumbs.db
 # JigAi runtime
 .jigai/
 
-# Claude Code
-.claude/
+# Claude Code — only exclude machine-specific settings
+.claude/settings.local.json
 
 # Git worktrees
 .worktrees/
